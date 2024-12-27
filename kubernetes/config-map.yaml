@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: image-tag-config
+  namespace: default
+data:
+  IMAGE_TAG: "latest"

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-react
+  labels:
+    app: simple-react
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+    NodePort: 30000
+  selector:
+    app: simple-react

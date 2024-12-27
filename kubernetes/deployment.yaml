@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-react
+  labels:
+    app: simple-react
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: simple-react
+  template:
+    metadata:
+      labels:
+        app: simple-react
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: simple-react
+        image: konami98/simple-react:<tag>
+        imagePullPolicy: "Always"
+        ports:
+        - containerPort: 3000
