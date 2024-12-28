@@ -17,7 +17,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
       - name: simple-react
-        image: konami98/simple-react:${IMAGE_TAG}
+        image: konami98/simple-react:latest
         imagePullPolicy: "Always"
         ports:
         - containerPort: 3000
