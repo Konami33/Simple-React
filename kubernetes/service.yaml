@@ -10,6 +10,6 @@ spec:
   - port: 80
     targetPort: 3000
     protocol: TCP
-    NodePort: 30000
+    nodePort: 30000  # Changed from NodePort to nodePort
   selector:
     app: simple-react
