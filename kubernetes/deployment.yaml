@@ -20,4 +20,4 @@ spec:
         image: konami98/simple-react:latest
         imagePullPolicy: "Always"
         ports:
-        - containerPort: 3000
+        - containerPort: 80
