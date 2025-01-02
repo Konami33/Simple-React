@@ -1,0 +1,90 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  DOCKER_IMAGE: konami98/simple-react
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Clean Workspace
+        run: |
+          rm -rf *
+
+      - name: Docker System Cleanup
+        run: |
+          docker system prune -af --volumes || true
+          docker images ${{ env.DOCKER_IMAGE }} -q | xargs -r docker rmi || true
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies
+        working-directory: frontend
+        run: |
+          npm cache clean --force
+          rm -rf node_modules package-lock.json
+          npm install
+
+      - name: Docker Build & Push
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+        run: |
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          IMAGE_TAG=${{ github.run_number }}
+          FULL_IMAGE_NAME=${{ env.DOCKER_IMAGE }}:$IMAGE_TAG
+          docker build --no-cache -t $FULL_IMAGE_NAME ./frontend
+          docker push $FULL_IMAGE_NAME
+
+      # - name: Update ConfigMap
+      #   env:
+      #     KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+      #   run: |
+      #     IMAGE_TAG=${{ github.run_number }}
+      #     echo "$KUBE_CONFIG" > kubeconfig
+      #     export KUBECONFIG=kubeconfig
+      #     kubectl create configmap image-tag-config --from-literal=IMAGE_TAG=$IMAGE_TAG --dry-run=client -o yaml | kubectl apply -f -
+
+      # - name: Deploy to Kubernetes
+      #   env:
+      #     KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+      #   run: |
+      #     IMAGE_TAG=${{ github.run_number }}
+      #     echo "$KUBE_CONFIG" > kubeconfig
+      #     export KUBECONFIG=kubeconfig
+      #     kubectl get nodes
+      #     sed -i "s|${{ env.DOCKER_IMAGE }}:[^\\\"]*|${{ env.DOCKER_IMAGE }}:$IMAGE_TAG|" kubernetes/deployment.yaml
+      #     kubectl apply -f kubernetes/deployment.yaml
+      #     kubectl apply -f kubernetes/service.yaml
+      #     kubectl rollout status deployment/simple-react
+      #     kubectl get pods | grep simple-react
+
+      # - name: Deployment Debug Info (on failure)
+      #   if: failure()
+      #   env:
+      #     KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+      #   run: |
+      #     echo "$KUBE_CONFIG" > kubeconfig
+      #     export KUBECONFIG=kubeconfig
+      #     echo 'Kubernetes Deployment Status:'
+      #     kubectl get deployments
+      #     echo 'Pod Status:'
+      #     kubectl get pods
+      #     echo 'Recent Pod Logs:'
+      #     kubectl logs -l app=simple-react --tail=50 || true
+
+      # - name: Clean Up Docker System (always)
+      #   if: always()
+      #   run: docker system prune -af --volumes || true
