@@ -7,6 +7,9 @@ on:
 
 env:
   DOCKER_IMAGE: konami98/simple-react
+  KUBE_NAMESPACE: default
+  DEPLOYMENT_NAME: simple-react
+  SERVICE_NAME: simple-react
 
 jobs:
   pipeline:
@@ -54,7 +57,7 @@ jobs:
       - name: Configure kubectl
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
-          K3S_MASTER_IP: ${{ secrets.K3S_MASTER_IP }}  # Add this secret in GitHub
+          K3S_MASTER_IP: ${{ secrets.K3S_MASTER_IP }}
         run: |
           mkdir -p $HOME/.kube
           echo "$KUBE_CONFIG" > $HOME/.kube/config
@@ -72,52 +75,35 @@ jobs:
         run: |
           IMAGE_TAG=${{ github.run_number }}
           
-          # Apply Kubernetes manifests
-          kubectl apply -f kubernetes/deployment.yaml
-          kubectl apply -f kubernetes/service.yaml
-          
-          # Update deployment with new image
-          kubectl set image deployment/${{ env.DEPLOYMENT_NAME }} ${{ env.DEPLOYMENT_NAME }}=${{ env.DOCKER_IMAGE }}:$IMAGE_TAG
-          
-          # Wait for rollout to complete
-          kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} --timeout=300s
-
-      - name: Deploy to Kubernetes
-        run: |
-          IMAGE_TAG=${{ github.run_number }}
-          
-          echo "Verifying cluster connection..."
-          kubectl get nodes
-          
           echo "Applying deployment..."
-          kubectl apply -f kubernetes/deployment.yaml --validate=false
+          kubectl apply -f kubernetes/deployment.yaml
           
           echo "Applying service..."
-          kubectl apply -f kubernetes/service.yaml --validate=false
+          kubectl apply -f kubernetes/service.yaml
           
           echo "Updating image..."
-          kubectl set image deployment/${DEPLOYMENT_NAME} ${DEPLOYMENT_NAME}=${DOCKER_IMAGE}:${IMAGE_TAG} -n ${KUBE_NAMESPACE}
+          kubectl set image deployment/simple-react simple-react=${{ env.DOCKER_IMAGE }}:${IMAGE_TAG}
           
           echo "Waiting for rollout..."
-          kubectl rollout status deployment/${DEPLOYMENT_NAME} -n ${KUBE_NAMESPACE} --timeout=300s
+          kubectl rollout status deployment/simple-react --timeout=300s
 
       - name: Verify Deployment
         run: |
           echo "Checking deployment status..."
-          kubectl get deployment ${{ env.DEPLOYMENT_NAME }} -o wide
+          kubectl get deployment simple-react -o wide
           
           echo "Checking pods status..."
-          kubectl get pods -l app=${{ env.DEPLOYMENT_NAME }} -o wide
+          kubectl get pods -l app=simple-react -o wide
           
           echo "Checking service status..."
-          kubectl get service ${{ env.SERVICE_NAME }} -o wide
+          kubectl get service simple-react -o wide
           
           echo "Checking endpoints..."
-          kubectl get endpoints ${{ env.SERVICE_NAME }} -o wide
+          kubectl get endpoints simple-react
 
       - name: Rollback on Failure
         if: failure()
         run: |
           echo "Deployment failed, initiating rollback..."
-          kubectl rollout undo deployment/${{ env.DEPLOYMENT_NAME }}
-          kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} --timeout=300s
+          kubectl rollout undo deployment/simple-react
+          kubectl rollout status deployment/simple-react --timeout=300s
