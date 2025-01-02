@@ -1,0 +1,95 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  DOCKER_IMAGE: konami98/simple-react
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Docker System Cleanup
+        run: |
+          docker system prune -af --volumes || true
+          docker images ${{ env.DOCKER_IMAGE }} -q | xargs -r docker rmi || true
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies
+        working-directory: ./frontend
+        run: |
+          npm cache clean --force
+          rm -rf node_modules package-lock.json
+          npm install
+
+      - name: Docker Build & Push
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+        run: |
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          IMAGE_TAG=${{ github.run_number }}
+          FULL_IMAGE_NAME=${{ env.DOCKER_IMAGE }}:$IMAGE_TAG
+          LATEST_IMAGE_NAME=${{ env.DOCKER_IMAGE }}:latest
+          docker build --no-cache -t $FULL_IMAGE_NAME -t $LATEST_IMAGE_NAME ./frontend
+          docker push $FULL_IMAGE_NAME
+          docker push $LATEST_IMAGE_NAME
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure kubectl
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBE_CONFIG" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Deploy to Kubernetes
+        run: |
+          IMAGE_TAG=${{ github.run_number }}
+          
+          # Apply Kubernetes manifests
+          kubectl apply -f kubernetes/deployment.yaml
+          kubectl apply -f kubernetes/service.yaml
+          
+          # Update deployment with new image
+          kubectl set image deployment/${{ env.DEPLOYMENT_NAME }} ${{ env.DEPLOYMENT_NAME }}=${{ env.DOCKER_IMAGE }}:$IMAGE_TAG
+          
+          # Wait for rollout to complete
+          kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} --timeout=300s
+
+      - name: Verify Deployment
+        run: |
+          echo "Checking deployment status..."
+          kubectl get deployment ${{ env.DEPLOYMENT_NAME }} -o wide
+          
+          echo "Checking pods status..."
+          kubectl get pods -l app=${{ env.DEPLOYMENT_NAME }} -o wide
+          
+          echo "Checking service status..."
+          kubectl get service ${{ env.SERVICE_NAME }} -o wide
+          
+          echo "Checking endpoints..."
+          kubectl get endpoints ${{ env.SERVICE_NAME }}
+
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          echo "Deployment failed, initiating rollback..."
+          kubectl rollout undo deployment/${{ env.DEPLOYMENT_NAME }}
+          kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} --timeout=300s
