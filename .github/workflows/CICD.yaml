@@ -54,10 +54,19 @@ jobs:
       - name: Configure kubectl
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+          K3S_MASTER_IP: ${{ secrets.K3S_MASTER_IP }}  # Add this secret in GitHub
         run: |
           mkdir -p $HOME/.kube
           echo "$KUBE_CONFIG" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
+          
+          # Replace localhost/127.0.0.1 with K3S master IP
+          sed -i "s/127.0.0.1/$K3S_MASTER_IP/" $HOME/.kube/config
+          sed -i "s/localhost/$K3S_MASTER_IP/" $HOME/.kube/config
+          
+          # Verify the config
+          echo "Checking cluster connection..."
+          kubectl cluster-info
 
       - name: Deploy to Kubernetes
         run: |
