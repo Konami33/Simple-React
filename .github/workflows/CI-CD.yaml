@@ -31,11 +31,16 @@ jobs:
           node-version: '18'
 
       - name: Install Dependencies
-        working-directory: frontend
         run: |
+          if [ ! -d "frontend" ]; then
+            echo "Error: frontend directory not found!"
+            exit 1
+          fi
+          cd frontend
           npm cache clean --force
           rm -rf node_modules package-lock.json
           npm install
+
 
       - name: Docker Build & Push
         env:
